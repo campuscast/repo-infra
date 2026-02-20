@@ -1,0 +1,34 @@
+{
+  "dashboard": {
+    "title": "CampusCast - Overview",
+    "uid": "campuscast-overview",
+    "panels": [
+      {
+        "title": "CRDT Auto-Merge Rate (target: >99%)",
+        "type": "gauge",
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+        "targets": [{ "expr": "campuscast_crdt_auto_merge_rate" }],
+        "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 0.95 }, { "color": "green", "value": 0.99 }] } } }
+      },
+      {
+        "title": "Invariant Violations (target: 0)",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+        "targets": [{ "expr": "campuscast_invariant_violations_total" }]
+      },
+      {
+        "title": "Convergence Time p95 (target: <200ms)",
+        "type": "gauge",
+        "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+        "targets": [{ "expr": "histogram_quantile(0.95, campuscast_convergence_time_bucket)" }],
+        "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 150 }, { "color": "red", "value": 200 }] } } }
+      },
+      {
+        "title": "Connected Clients",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+        "targets": [{ "expr": "campuscast_connected_clients" }]
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:9464']
+  - job_name: 'auth-iam'
+    static_configs:
+      - targets: ['auth-iam:9464']
+  - job_name: 'zone-policy'
+    static_configs:
+      - targets: ['zone-policy:9464']
+  - job_name: 'device-management'
+    static_configs:
+      - targets: ['device-management:9464']
+  - job_name: 'content-service'
+    static_configs:
+      - targets: ['content-service:9464']
+  - job_name: 'schedule-service'
+    static_configs:
+      - targets: ['schedule-service:9464']
+  - job_name: 'sync-service'
+    static_configs:
+      - targets: ['sync-service:9464']
+  - job_name: 'signing-kms'
+    static_configs:
+      - targets: ['signing-kms:9464']
+  - job_name: 'audit-service'
+    static_configs:
+      - targets: ['audit-service:9464']
