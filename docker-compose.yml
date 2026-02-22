@@ -1,5 +1,3 @@
-version: "3.9"
-
 x-common-env: &common-env
   NODE_ENV: development
   REDIS_URL: redis://redis:6379
@@ -86,9 +84,20 @@ services:
     ports:
       - "3200:3100"
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./docker/otel-collector/config.yaml:/etc/otel/config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
   # ─── Application Services ───
   api-gateway:
-    build: ../repo-api-gateway-bff
+    build:
+      context: ..
+      dockerfile: repo-api-gateway-bff/Dockerfile
     environment:
       <<: *common-env
       PORT: "3000"
@@ -100,13 +109,13 @@ services:
       SYNC_SERVICE_URL: http://sync-service:3006
       VALIDATION_SERVICE_URL: http://validation-qa:3007
       AUDIT_SERVICE_URL: http://audit-service:3009
-    ports:
-      - "3000:3000"
     depends_on:
       - redis
 
   auth-iam:
-    build: ../repo-auth-iam
+    build:
+      context: ..
+      dockerfile: repo-auth-iam/Dockerfile
     environment:
       <<: *common-env
       PORT: "3001"
@@ -118,17 +127,22 @@ services:
         condition: service_healthy
 
   zone-policy:
-    build: ../repo-zone-policy
+    build:
+      context: ..
+      dockerfile: repo-zone-policy/Dockerfile
     environment:
       <<: *common-env
       PORT: "3002"
       DATABASE_URL: postgresql://campuscast:campuscast@postgres:5432/zone_policy_db
+      SYNC_SERVICE_URL: http://sync-service:3006
     depends_on:
       postgres:
         condition: service_healthy
 
   device-management:
-    build: ../repo-device-management
+    build:
+      context: ..
+      dockerfile: repo-device-management/Dockerfile
     environment:
       <<: *common-env
       PORT: "3003"
@@ -138,7 +152,9 @@ services:
         condition: service_healthy
 
   content-service:
-    build: ../repo-content-service
+    build:
+      context: ..
+      dockerfile: repo-content-service/Dockerfile
     environment:
       <<: *common-env
       PORT: "3004"
@@ -147,6 +163,7 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: campuscast-content
+      SIGNING_KMS_URL: http://signing-kms:3008
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,12 +171,20 @@ services:
         condition: service_started
 
   schedule-service:
-    build: ../repo-schedule-service
+    build:
+      context: ..
+      dockerfile: repo-schedule-service/Dockerfile
     environment:
       <<: *common-env
       PORT: "3005"
       DATABASE_URL: postgresql://campuscast:campuscast@postgres:5432/schedule_db
       CRDT_COMPACTION_THRESHOLD: "100"
+      CRDT_GLOBAL_ENABLED: "true"
+      SIGNING_KMS_URL: http://signing-kms:3008
+      VALIDATION_QA_URL: http://validation-qa:3007
+      SYNC_SERVICE_URL: http://sync-service:3006
+      ZONE_SERVICE_URL: http://zone-policy:3002
+      DEVICE_SERVICE_URL: http://device-management:3003
     depends_on:
       postgres:
         condition: service_healthy
@@ -167,39 +192,44 @@ services:
         condition: service_healthy
 
   sync-service:
-    build: ../repo-sync-service
+    build:
+      context: ..
+      dockerfile: repo-sync-service/Dockerfile
     environment:
       <<: *common-env
       PORT: "3006"
       MQTT_BROKER_URL: mqtt://mosquitto:1883
       SCHEDULE_SERVICE_URL: http://schedule-service:3005
+      ZONE_SERVICE_URL: http://zone-policy:3002
+      DEVICE_SERVICE_URL: http://device-management:3003
+      SIGNING_KMS_URL: http://signing-kms:3008
       DEDUP_WINDOW_SECONDS: "3600"
       MAX_OPS_PER_MINUTE: "60"
-    ports:
-      - "3006:3006"
     depends_on:
       - redis
       - mosquitto
 
   validation-qa:
-    build: ../repo-validation-qa
+    build:
+      context: ..
+      dockerfile: repo-validation-qa/Dockerfile
     environment:
       <<: *common-env
       PORT: "3007"
       CONTENT_SERVICE_URL: http://content-service:3004
-    profiles:
-      - with-validation
 
   signing-kms:
-    build: ../repo-signing-kms
+    build:
+      context: ..
+      dockerfile: repo-signing-kms/Dockerfile
     environment:
       <<: *common-env
       PORT: "3008"
-    ports:
-      - "3008:3008"
 
   audit-service:
-    build: ../repo-audit-service
+    build:
+      context: ..
+      dockerfile: repo-audit-service/Dockerfile
     environment:
       <<: *common-env
       PORT: "3009"

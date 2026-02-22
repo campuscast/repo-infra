@@ -20,18 +20,25 @@ docker-compose ps
 
 ## Services Map
 
-| Service           | Port | Internal               |
-| ----------------- | ---- | ---------------------- |
-| API Gateway       | 3000 | api-gateway:3000       |
-| Auth & IAM        | -    | auth-iam:3001          |
-| Zone & Policy     | -    | zone-policy:3002       |
-| Device Management | -    | device-management:3003 |
-| Content Service   | -    | content-service:3004   |
-| Schedule Service  | -    | schedule-service:3005  |
-| Sync Service (WS) | 3006 | sync-service:3006      |
-| Validation QA     | -    | validation-qa:3007     |
-| Signing KMS       | 3008 | signing-kms:3008       |
-| Audit Service     | -    | audit-service:3009     |
+| Service           | External Access | Internal               |
+| ----------------- | --------------- | ---------------------- |
+| API Gateway       | no direct port  | api-gateway:3000       |
+| Auth & IAM        | no direct port  | auth-iam:3001          |
+| Zone & Policy     | no direct port  | zone-policy:3002       |
+| Device Management | no direct port  | device-management:3003 |
+| Content Service   | no direct port  | content-service:3004   |
+| Schedule Service  | no direct port  | schedule-service:3005  |
+| Sync Service (WS) | no direct port  | sync-service:3006      |
+| Validation QA     | no direct port  | validation-qa:3007     |
+| Signing KMS       | no direct port  | signing-kms:3008       |
+| Audit Service     | no direct port  | audit-service:3009     |
+
+## Security Perimeter
+
+- External ingress is only through `nginx` on ports `80/443`.
+- All app services are internal-only on the Docker network and are not exposed via host `ports`.
+- External API surface is `nginx -> api-gateway` (`/api/*`, `/ws/*`).
+- Explicit unauthenticated exceptions are only `/health` and `/metrics` (proxied to gateway).
 
 ## Infrastructure
 
