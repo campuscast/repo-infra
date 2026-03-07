@@ -1,0 +1,30 @@
+# Runtime / volumes
+docker/mosquitto/data/
+docker/nginx/certs/*.pem
+docker/nginx/certs/*.key
+docker/nginx/certs/*.crt
+
+# Secrets
+.env
+.env.local
+*.key
+*.pem
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+tmp/
+
+# DO NOT ignore (these must be committed):
+# docker-compose.yml
+# docker/nginx/conf.d/
+# docker/prometheus/prometheus.yml
+# docker/grafana/provisioning/
+# docker/grafana/dashboards/
+# docker/mosquitto/config/
+# scripts/
+# README.md
