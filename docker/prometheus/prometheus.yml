@@ -5,28 +5,31 @@ global:
 scrape_configs:
   - job_name: 'api-gateway'
     static_configs:
-      - targets: ['api-gateway:9464']
+      - targets: ['api-gateway:3000']
   - job_name: 'auth-iam'
     static_configs:
-      - targets: ['auth-iam:9464']
+      - targets: ['auth-iam:3001']
   - job_name: 'zone-policy'
     static_configs:
-      - targets: ['zone-policy:9464']
+      - targets: ['zone-policy:3002']
   - job_name: 'device-management'
     static_configs:
-      - targets: ['device-management:9464']
+      - targets: ['device-management:3003']
   - job_name: 'content-service'
     static_configs:
-      - targets: ['content-service:9464']
+      - targets: ['content-service:3004']
   - job_name: 'schedule-service'
     static_configs:
-      - targets: ['schedule-service:9464']
+      - targets: ['schedule-service:3005']
   - job_name: 'sync-service'
     static_configs:
-      - targets: ['sync-service:9464']
+      - targets: ['sync-service:3006']
+  - job_name: 'validation-qa'
+    static_configs:
+      - targets: ['validation-qa:3007']
   - job_name: 'signing-kms'
     static_configs:
-      - targets: ['signing-kms:9464']
+      - targets: ['signing-kms:3008']
   - job_name: 'audit-service'
     static_configs:
-      - targets: ['audit-service:9464']
+      - targets: ['audit-service:3009']

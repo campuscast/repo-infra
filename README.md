@@ -22,6 +22,7 @@ docker-compose ps
 
 | Service           | External Access | Internal               |
 | ----------------- | --------------- | ---------------------- |
+| Web App (Next.js) | via nginx:80/443| web-app:3000           |
 | API Gateway       | no direct port  | api-gateway:3000       |
 | Auth & IAM        | no direct port  | auth-iam:3001          |
 | Zone & Policy     | no direct port  | zone-policy:3002       |
@@ -37,7 +38,7 @@ docker-compose ps
 
 - External ingress is only through `nginx` on ports `80/443`.
 - All app services are internal-only on the Docker network and are not exposed via host `ports`.
-- External API surface is `nginx -> api-gateway` (`/api/*`, `/ws/*`).
+- External UI/API surface is `nginx -> web-app` (`/`) and `nginx -> api-gateway` (`/api/*`, `/ws/*`).
 - Explicit unauthenticated exceptions are only `/health` and `/metrics` (proxied to gateway).
 
 ## Infrastructure
@@ -57,3 +58,19 @@ docker-compose ps
 
 All services share `REDIS_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `NODE_ENV`.
 DB services use `DATABASE_URL`. Content uses `S3_*`. Sync uses `MQTT_BROKER_URL`.
+
+## Initial Root User Bootstrap
+
+`auth-iam` creates a root user on first startup (idempotent):
+
+- login: `root`
+- password: `admin`
+- role: `admin`
+
+Override for production via env variables in deploy environment:
+
+- `AUTH_BOOTSTRAP_ROOT_ENABLED` (default `true`)
+- `AUTH_BOOTSTRAP_ROOT_EMAIL` (default `root`)
+- `AUTH_BOOTSTRAP_ROOT_PASSWORD` (default `admin`)
+- `AUTH_BOOTSTRAP_ROOT_ROLE` (default `admin`)
+- `AUTH_BOOTSTRAP_ROOT_RESET_PASSWORD` (default `false`)
