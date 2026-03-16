@@ -5,17 +5,25 @@ Infrastructure configurations for CampusCast Distributed Media CMS.
 ## Quick Start
 
 ```bash
-# Start all infrastructure + services
-docker-compose up -d
+# Full stack up (build + run)
+./scripts/stack.sh up
 
-# Start with optional validation-qa service
-docker-compose --profile with-validation up -d
+# Full stack rebuild from scratch
+./scripts/stack.sh rebuild
 
 # Seed development data
-docker exec -i campuscast-postgres psql -U campuscast < scripts/seed.sql
+docker exec -i campuscast-postgres-1 psql -U campuscast < scripts/seed.sql
 
 # View services
-docker-compose ps
+./scripts/stack.sh ps
+```
+
+Alternative direct commands:
+
+```bash
+# Compose v2 canonical file
+docker compose -f compose.yaml up -d --build
+docker compose -f compose.yaml ps
 ```
 
 ## Services Map
@@ -74,3 +82,27 @@ Override for production via env variables in deploy environment:
 - `AUTH_BOOTSTRAP_ROOT_PASSWORD` (default `admin`)
 - `AUTH_BOOTSTRAP_ROOT_ROLE` (default `admin`)
 - `AUTH_BOOTSTRAP_ROOT_RESET_PASSWORD` (default `false`)
+
+## Troubleshooting
+
+### Docker Desktop: `unknown flag: --project-name`
+
+If clicking "Start" on the `repo-infra` compose app in Docker Desktop fails with:
+
+`unknown flag: --project-name`
+
+then your `docker` CLI does not resolve the compose plugin correctly.
+
+Use the stack script (it auto-detects working compose CLI):
+
+```bash
+./scripts/stack.sh up
+```
+
+and check plugin availability:
+
+```bash
+docker compose version || docker-compose version
+```
+
+If `docker compose version` fails but `docker-compose version` works, use `docker-compose` commands (or the script) for this workspace.
