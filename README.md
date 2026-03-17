@@ -5,25 +5,43 @@ Infrastructure configurations for CampusCast Distributed Media CMS.
 ## Quick Start
 
 ```bash
-# Full stack up (build + run)
-./scripts/stack.sh up
-
-# Full stack rebuild from scratch
-./scripts/stack.sh rebuild
-
-# Seed development data
-docker exec -i campuscast-postgres-1 psql -U campuscast < scripts/seed.sql
-
-# View services
-./scripts/stack.sh ps
+# Canonical install/init (migrations + first admin + smoke checks)
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/bootstrap.sh --fresh
 ```
 
 Alternative direct commands:
 
 ```bash
-# Compose v2 canonical file
-docker compose -f compose.yaml up -d --build
-docker compose -f compose.yaml ps
+# Same flow via stack wrapper
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/stack.sh bootstrap --fresh
+```
+
+## Canonical Install/Init Flow
+
+`./scripts/bootstrap.sh` performs:
+
+1. Environment guard checks (required first-admin credentials, no `root/admin` insecure default).
+2. Full stack startup with production-like DB mode:
+   - migrations enabled (`DB_MIGRATIONS_RUN=true`)
+   - schema sync disabled (`DB_SYNCHRONIZE=false`)
+3. Install-time first-admin bootstrap through `repo-auth-iam` CLI.
+4. Post-check smoke validation (`./scripts/smoke-bootstrap.sh`):
+   - schema/migration state across service DBs,
+   - admin presence in `auth_db`,
+   - auth login + `/api/v1/me`.
+
+## Development Seed Data (Explicit Dev-Only)
+
+`scripts/seed.sql` is no longer part of required install/init flow.
+
+Use it only for local development fixtures:
+
+```bash
+docker exec -i campuscast-postgres-1 psql -U campuscast < scripts/seed.sql
 ```
 
 ## Services Map
@@ -67,19 +85,22 @@ docker compose -f compose.yaml ps
 All services share `REDIS_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `NODE_ENV`.
 DB services use `DATABASE_URL`. Content uses `S3_*`. Sync uses `MQTT_BROKER_URL`.
 
-## Initial Root User Bootstrap
+DB install defaults in compose:
 
-`auth-iam` creates a root user on first startup (idempotent):
+- `DB_MIGRATIONS_RUN=true`
+- `DB_SYNCHRONIZE=false`
 
-- login: `root`
-- password: `admin`
-- role: `admin`
+Bootstrap script inputs:
 
-Override for production via env variables in deploy environment:
+- `AUTH_BOOTSTRAP_ADMIN_EMAIL` (required)
+- `AUTH_BOOTSTRAP_ADMIN_PASSWORD` (required)
+- `AUTH_BOOTSTRAP_ADMIN_ROLE` (optional, default `admin`)
 
-- `AUTH_BOOTSTRAP_ROOT_ENABLED` (default `true`)
-- `AUTH_BOOTSTRAP_ROOT_EMAIL` (default `root`)
-- `AUTH_BOOTSTRAP_ROOT_PASSWORD` (default `admin`)
+Legacy startup bootstrap in `auth-iam` remains available only as explicit opt-in:
+
+- `AUTH_BOOTSTRAP_ROOT_ENABLED` (default `false`)
+- `AUTH_BOOTSTRAP_ROOT_EMAIL` (required when enabled)
+- `AUTH_BOOTSTRAP_ROOT_PASSWORD` (required when enabled)
 - `AUTH_BOOTSTRAP_ROOT_ROLE` (default `admin`)
 - `AUTH_BOOTSTRAP_ROOT_RESET_PASSWORD` (default `false`)
 

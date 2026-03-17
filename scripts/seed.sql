@@ -1,5 +1,6 @@
--- Seed data for local development
--- Run against each service DB
+-- DEV-ONLY fixture seed for local demos/tests.
+-- Not required for canonical install/init flow.
+-- Apply explicitly only when you need sample data.
 
 -- === auth_db ===
 \c auth_db;

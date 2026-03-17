@@ -26,10 +26,12 @@ Usage: ./scripts/stack.sh <command>
 
 Commands:
   up        Build and start the full stack in background
+  bootstrap Install/init flow: up + first admin + smoke checks
   start     Start existing stopped containers
   stop      Stop running containers
   down      Stop and remove containers and orphans
   rebuild   Rebuild images from scratch and start stack
+  smoke     Run install/bootstrap smoke checks against running stack
   ps        Show stack services state
   logs      Follow logs (all services)
   config    Validate/render Compose config
@@ -41,6 +43,10 @@ cmd="${1:-}"
 case "${cmd}" in
   up)
     compose up -d --build --remove-orphans
+    ;;
+  bootstrap)
+    shift
+    "${ROOT_DIR}/scripts/bootstrap.sh" "$@"
     ;;
   start)
     compose start
@@ -55,6 +61,10 @@ case "${cmd}" in
     compose down --remove-orphans
     compose build --no-cache
     compose up -d --remove-orphans
+    ;;
+  smoke)
+    shift
+    "${ROOT_DIR}/scripts/smoke-bootstrap.sh" "$@"
     ;;
   ps)
     compose ps
