@@ -151,5 +151,56 @@ if [[ "${me_response}" != *"\"${ADMIN_ROLE}\""* ]]; then
   echo "[smoke] Response: ${me_response}" >&2
   exit 1
 fi
+if [[ "${me_response}" != *"\"permissions\""* ]]; then
+  echo "[smoke] FAIL: /api/v1/me does not include permissions array" >&2
+  echo "[smoke] Response: ${me_response}" >&2
+  exit 1
+fi
+echo "[smoke] OK: /me returns email, role, and permissions"
 
-echo "[smoke] PASS: migrations, first-admin bootstrap, and auth login checks succeeded."
+# ── Init state ──
+echo "[smoke] Checking system init state"
+init_response="$(curl -fsS "${BASE_URL}/api/v1/system/init-state")"
+if [[ "${init_response}" != *"\"initialized\":true"* ]]; then
+  echo "[smoke] FAIL: /api/v1/system/init-state does not show initialized=true" >&2
+  echo "[smoke] Response: ${init_response}" >&2
+  exit 1
+fi
+echo "[smoke] OK: system init-state shows initialized=true"
+
+# ── Users API ──
+echo "[smoke] Checking users list API"
+users_response="$(curl -fsS "${BASE_URL}/api/v1/users" \
+  -H "Authorization: Bearer ${access_token}")"
+if [[ "${users_response}" != *"\"data\""* ]]; then
+  echo "[smoke] FAIL: GET /api/v1/users did not return data array" >&2
+  echo "[smoke] Response: ${users_response}" >&2
+  exit 1
+fi
+echo "[smoke] OK: users list returns data"
+
+# ── Roles API ──
+echo "[smoke] Checking roles list API"
+roles_response="$(curl -fsS "${BASE_URL}/api/v1/roles" \
+  -H "Authorization: Bearer ${access_token}")"
+if [[ "${roles_response}" != *"\"data\""* ]]; then
+  echo "[smoke] FAIL: GET /api/v1/roles did not return data array" >&2
+  echo "[smoke] Response: ${roles_response}" >&2
+  exit 1
+fi
+if [[ "${roles_response}" != *"\"super_admin\""* ]]; then
+  echo "[smoke] FAIL: roles list does not contain super_admin role" >&2
+  exit 1
+fi
+echo "[smoke] OK: roles list returns data with default roles"
+
+# ── Permission enforcement ──
+echo "[smoke] Checking permission enforcement (unauthenticated request)"
+unauth_code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/users")"
+if [[ "${unauth_code}" != "401" ]]; then
+  echo "[smoke] FAIL: GET /api/v1/users without token returned ${unauth_code}, expected 401" >&2
+  exit 1
+fi
+echo "[smoke] OK: unauthenticated /users request returns 401"
+
+echo "[smoke] PASS: migrations, first-admin bootstrap, auth login, IAM API, and permission checks succeeded."
