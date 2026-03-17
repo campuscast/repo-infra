@@ -32,6 +32,7 @@ Commands:
   down      Stop and remove containers and orphans
   rebuild   Rebuild images from scratch and start stack
   smoke     Run install/bootstrap smoke checks against running stack
+  e2e       Run IAM/security e2e checks against running stack
   ps        Show stack services state
   logs      Follow logs (all services)
   config    Validate/render Compose config
@@ -65,6 +66,10 @@ case "${cmd}" in
   smoke)
     shift
     "${ROOT_DIR}/scripts/smoke-bootstrap.sh" "$@"
+    ;;
+  e2e)
+    shift
+    "${ROOT_DIR}/scripts/e2e-iam.sh" "$@"
     ;;
   ps)
     compose ps

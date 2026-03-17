@@ -32,7 +32,26 @@ AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
 4. Post-check smoke validation (`./scripts/smoke-bootstrap.sh`):
    - schema/migration state across service DBs,
    - admin presence in `auth_db`,
-   - auth login + `/api/v1/me`.
+   - auth login + cookie-based `/api/v1/me`,
+   - init-state / users / roles / permission enforcement,
+   - schedule + device read paths,
+   - logout + cookie session invalidation.
+
+Optional IAM/security e2e suite against running stack:
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/e2e-iam.sh
+```
+
+or through stack wrapper:
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/stack.sh e2e
+```
 
 ## Development Seed Data (Explicit Dev-Only)
 

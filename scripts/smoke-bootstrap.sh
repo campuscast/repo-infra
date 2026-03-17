@@ -10,6 +10,11 @@ BASE_URL="${BASE_URL:-http://localhost:3000}"
 ADMIN_EMAIL="${AUTH_BOOTSTRAP_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-}"
 ADMIN_ROLE="${AUTH_BOOTSTRAP_ADMIN_ROLE:-admin}"
+TMP_DIR="$(mktemp -d)"
+COOKIE_JAR="${TMP_DIR}/cookies.txt"
+
+trap 'rm -rf "${TMP_DIR}"' EXIT
+touch "${COOKIE_JAR}"
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE_CMD=(docker compose)
@@ -40,6 +45,17 @@ json_escape() {
   value="${value//\"/\\\"}"
   value="${value//$'\n'/\\n}"
   printf "%s" "${value}"
+}
+
+extract_json_string() {
+  local json="$1"
+  local field="$2"
+  printf "%s" "${json}" | sed -n "s/.*\"${field}\":\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+cookie_value() {
+  local cookie_name="$1"
+  awk -v name="${cookie_name}" 'BEGIN { value = "" } !/^#/ && $6 == name { value = $7 } END { print value }' "${COOKIE_JAR}"
 }
 
 check_table() {
@@ -129,9 +145,11 @@ echo "[smoke] OK: admin user ${ADMIN_EMAIL} exists"
 echo "[smoke] Checking auth login"
 login_payload="$(printf '{"email":"%s","password":"%s"}' "$(json_escape "${ADMIN_EMAIL}")" "$(json_escape "${ADMIN_PASSWORD}")")"
 login_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/login" \
+  -c "${COOKIE_JAR}" \
+  -b "${COOKIE_JAR}" \
   -H "Content-Type: application/json" \
   -d "${login_payload}")"
-access_token="$(printf "%s" "${login_response}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')"
+access_token="$(extract_json_string "${login_response}" "access_token")"
 
 if [[ -z "${access_token}" ]]; then
   echo "[smoke] FAIL: login response did not contain access_token" >&2
@@ -157,6 +175,23 @@ if [[ "${me_response}" != *"\"permissions\""* ]]; then
   exit 1
 fi
 echo "[smoke] OK: /me returns email, role, and permissions"
+
+echo "[smoke] Checking cookie-based auth flow"
+access_cookie="$(cookie_value "cc_access_token")"
+refresh_cookie="$(cookie_value "refresh_token")"
+csrf_cookie="$(cookie_value "csrf_token")"
+if [[ -z "${access_cookie}" || -z "${refresh_cookie}" || -z "${csrf_cookie}" ]]; then
+  echo "[smoke] FAIL: login did not set expected auth/csrf cookies" >&2
+  exit 1
+fi
+
+me_cookie_response="$(curl -fsS "${BASE_URL}/api/v1/me" -b "${COOKIE_JAR}")"
+if [[ "${me_cookie_response}" != *"\"email\":\"${ADMIN_EMAIL}\""* ]]; then
+  echo "[smoke] FAIL: cookie-auth /api/v1/me did not return expected admin email" >&2
+  echo "[smoke] Response: ${me_cookie_response}" >&2
+  exit 1
+fi
+echo "[smoke] OK: cookie-based /me flow works"
 
 # ── Init state ──
 echo "[smoke] Checking system init state"
@@ -194,6 +229,48 @@ if [[ "${roles_response}" != *"\"super_admin\""* ]]; then
 fi
 echo "[smoke] OK: roles list returns data with default roles"
 
+# ── Schedule + device read paths ──
+echo "[smoke] Checking zone/schedule/device read paths"
+zones_response="$(curl -fsS "${BASE_URL}/api/v1/zones?page=1&page_size=1" -H "Authorization: Bearer ${access_token}")"
+if [[ "${zones_response}" != *"\"data\""* ]]; then
+  echo "[smoke] FAIL: GET /api/v1/zones did not return data array" >&2
+  echo "[smoke] Response: ${zones_response}" >&2
+  exit 1
+fi
+
+zone_id="$(printf "%s" "${zones_response}" | sed -n 's/.*"zone_id":"\([^"]*\)".*/\1/p' | head -n1)"
+if [[ -z "${zone_id}" ]]; then
+  zone_name="smoke-zone-$(date +%s)"
+  create_zone_payload="$(printf '{"name":"%s","description":"smoke"}' "$(json_escape "${zone_name}")")"
+  create_zone_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/zones" \
+    -H "Authorization: Bearer ${access_token}" \
+    -H "Content-Type: application/json" \
+    -d "${create_zone_payload}")"
+  zone_id="$(extract_json_string "${create_zone_response}" "zone_id")"
+fi
+
+if [[ -z "${zone_id}" ]]; then
+  echo "[smoke] FAIL: could not determine zone_id for schedule/device checks" >&2
+  exit 1
+fi
+
+schedules_response="$(curl -fsS "${BASE_URL}/api/v1/schedules?zone_id=${zone_id}&page=1&page_size=5" \
+  -H "Authorization: Bearer ${access_token}")"
+if [[ "${schedules_response}" != *"\"data\""* ]]; then
+  echo "[smoke] FAIL: GET /api/v1/schedules did not return data array" >&2
+  echo "[smoke] Response: ${schedules_response}" >&2
+  exit 1
+fi
+
+devices_response="$(curl -fsS "${BASE_URL}/api/v1/devices?zone_id=${zone_id}" \
+  -H "Authorization: Bearer ${access_token}")"
+if [[ "${devices_response}" != *"\"data\""* ]]; then
+  echo "[smoke] FAIL: GET /api/v1/devices did not return data payload" >&2
+  echo "[smoke] Response: ${devices_response}" >&2
+  exit 1
+fi
+echo "[smoke] OK: schedule/device read paths respond successfully"
+
 # ── Permission enforcement ──
 echo "[smoke] Checking permission enforcement (unauthenticated request)"
 unauth_code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/users")"
@@ -203,4 +280,24 @@ if [[ "${unauth_code}" != "401" ]]; then
 fi
 echo "[smoke] OK: unauthenticated /users request returns 401"
 
-echo "[smoke] PASS: migrations, first-admin bootstrap, auth login, IAM API, and permission checks succeeded."
+echo "[smoke] Checking logout and session invalidation"
+logout_code="$(curl -s -o /dev/null -w '%{http_code}' \
+  -X POST "${BASE_URL}/api/v1/auth/logout" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: ${csrf_cookie}" \
+  -b "${COOKIE_JAR}" \
+  -c "${COOKIE_JAR}" \
+  -d '{}')"
+if [[ "${logout_code}" != "200" ]]; then
+  echo "[smoke] FAIL: /api/v1/auth/logout returned ${logout_code}, expected 200" >&2
+  exit 1
+fi
+
+me_after_logout_code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/me" -b "${COOKIE_JAR}")"
+if [[ "${me_after_logout_code}" != "401" ]]; then
+  echo "[smoke] FAIL: cookie-based /api/v1/me after logout returned ${me_after_logout_code}, expected 401" >&2
+  exit 1
+fi
+echo "[smoke] OK: logout invalidates cookie-based session"
+
+echo "[smoke] PASS: migrations, init-state, login, cookie-auth, IAM APIs, permission checks, schedule/device reads, and logout checks succeeded."

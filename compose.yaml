@@ -2,6 +2,7 @@ name: campuscast
 
 x-common-env: &common-env
   NODE_ENV: ${NODE_ENV:-production}
+  JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
   DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
   DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-true}
   REDIS_URL: redis://redis:6379
