@@ -11,6 +11,14 @@ AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
 ./scripts/bootstrap.sh --fresh
 ```
 
+Equivalent Make target:
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+make install-init
+```
+
 Alternative direct commands:
 
 ```bash
@@ -52,6 +60,78 @@ AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
 AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
 ./scripts/stack.sh e2e
 ```
+
+CI-friendly entrypoint (running stack + smoke + IAM e2e):
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+make ci-iam-runtime
+```
+
+## Smoke Runtime Artifact
+
+Latest local smoke artifact:
+
+- `artifacts/smoke-bootstrap-2026-03-17.log`
+- `artifacts/smoke-bootstrap-20260317.summary.md`
+
+Latest local IAM e2e artifact:
+
+- `artifacts/e2e-iam-2026-03-17.log`
+
+Re-run command:
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/smoke-bootstrap.sh | tee artifacts/smoke-bootstrap-$(date +%Y%m%d-%H%M%S).log
+```
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+./scripts/e2e-iam.sh | tee artifacts/e2e-iam-$(date +%Y%m%d-%H%M%S).log
+```
+
+## E2E Coverage Map (DEP-08 / VAL-02)
+
+`scripts/e2e-iam.sh` step-to-criterion mapping:
+
+| E2E step | Covered criterion |
+| -------- | ----------------- |
+| `Checking init-state` | bootstrap/init state |
+| `Admin login + cookie flow` | login + cookie session flow |
+| `Roles CRUD` | roles CRUD |
+| `Users CRUD` | users CRUD |
+| `Role assign/remove to user` + `Permission enforcement` | permission enforcement |
+| `Zone-scoped RBAC enforcement` | zone-level allow/deny server-side checks |
+| `MFA TOTP setup/verify/enable/login-challenge/disable flow` | MFA runtime flow (setup/verify/enable/challenge/disable) |
+| `Password reset + cookie auth + password change` | change/reset password |
+| `Checking audit side-effects` | audit side effects |
+| `Schedule fetch/edit happy path` | schedule happy path |
+| `Schedule ops path (add/move/remove)` | schedule interactive edit semantics (add/move/delete) |
+| `Schedule validate path` | schedule validation path before publish |
+| `PASS ...` final assertion | consolidated runtime e2e confirmation |
+
+## Validation Scripts (VAL-03 / VAL-04 / VAL-05 / VAL-08)
+
+Reproducible validation entrypoints (running stack required):
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@campuscast.local \
+AUTH_BOOTSTRAP_ADMIN_PASSWORD='replace-with-strong-password' \
+make validation-all
+```
+
+Individual targets:
+
+- `make val03` — load profile (100/500/1000 clients)
+- `make val04` — fault injection profile (loss/delay/duplicate/reconnect/partition equivalent)
+- `make val05` — merge/sync/payload/conflict metrics
+- `make val08` — aggregated thesis validation pack
+
+Artifacts are written to `artifacts/validation/` (`.json` + `.md` per run).
 
 ## Development Seed Data (Explicit Dev-Only)
 
@@ -114,6 +194,7 @@ Bootstrap script inputs:
 - `AUTH_BOOTSTRAP_ADMIN_EMAIL` (required)
 - `AUTH_BOOTSTRAP_ADMIN_PASSWORD` (required)
 - `AUTH_BOOTSTRAP_ADMIN_ROLE` (optional, default `admin`)
+- `AUTH_BOOTSTRAP_ADMIN_RESET_PASSWORD` (optional, default `false`, can also be set via `--admin-reset-password`)
 
 Legacy startup bootstrap in `auth-iam` remains available only as explicit opt-in:
 

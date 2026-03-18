@@ -1,0 +1,84 @@
+{
+  "criterion": "VAL-03",
+  "generated_at": "2026-03-18T07:07:55.347Z",
+  "base_url": "http://localhost:3000",
+  "scenario": "GET /api/v1/schedules load",
+  "scenarios": [
+    {
+      "clients": 100,
+      "requests_per_client": 3,
+      "total_requests": 300,
+      "success": 53,
+      "failures": 247,
+      "success_rate": 17.666666666666668,
+      "throughput_rps": 500.4205609929764,
+      "latency": {
+        "count": 53,
+        "min_ms": 4.969291999999996,
+        "max_ms": 100.08012500000001,
+        "avg_ms": 68.27122720754718,
+        "p50_ms": 73.90854199999998,
+        "p95_ms": 93.185167,
+        "p99_ms": 94.82437500000003
+      },
+      "failure_reasons": [
+        {
+          "reason": "HTTP_503",
+          "count": 247
+        }
+      ]
+    },
+    {
+      "clients": 500,
+      "requests_per_client": 3,
+      "total_requests": 1500,
+      "success": 5,
+      "failures": 1495,
+      "success_rate": 0.33333333333333337,
+      "throughput_rps": 27.676317167827104,
+      "latency": {
+        "count": 5,
+        "min_ms": 24.64333399999998,
+        "max_ms": 61.39499999999998,
+        "avg_ms": 39.37504159999999,
+        "p50_ms": 39.12491600000004,
+        "p95_ms": 44.384041999999965,
+        "p99_ms": 44.384041999999965
+      },
+      "failure_reasons": [
+        {
+          "reason": "HTTP_503",
+          "count": 1495
+        }
+      ]
+    },
+    {
+      "clients": 1000,
+      "requests_per_client": 3,
+      "total_requests": 3000,
+      "success": 8,
+      "failures": 2992,
+      "success_rate": 0.26666666666666666,
+      "throughput_rps": 31.2315121647794,
+      "latency": {
+        "count": 8,
+        "min_ms": 8.925375000000031,
+        "max_ms": 165.18212499999993,
+        "avg_ms": 87.25013537499999,
+        "p50_ms": 67.44079199999999,
+        "p95_ms": 140.51995799999997,
+        "p99_ms": 140.51995799999997
+      },
+      "failure_reasons": [
+        {
+          "reason": "HTTP_503",
+          "count": 2992
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Synthetic HTTP load from a single host process (concurrent virtual clients).",
+    "Useful for reproducible relative comparison (100/500/1000) on the same environment."
+  ]
+}

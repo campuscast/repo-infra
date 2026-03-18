@@ -1,0 +1,62 @@
+{
+  "criterion": "VAL-05",
+  "generated_at": "2026-03-18T07:11:50.019Z",
+  "base_url": "http://localhost:3000",
+  "schedule_id": "b40d1bae-09a0-445c-ba68-0b17e46df574",
+  "merge_time": {
+    "summary": {
+      "count": 3,
+      "min_ms": 28.13108299999999,
+      "max_ms": 152.383334,
+      "avg_ms": 86.97980566666666,
+      "p50_ms": 80.42500000000001,
+      "p95_ms": 80.42500000000001,
+      "p99_ms": 80.42500000000001
+    },
+    "per_batch": [
+      {
+        "slot_count": 20,
+        "merge_time_ms": 28.13108299999999,
+        "request_payload_bytes": 3953,
+        "response_bytes": 6627
+      },
+      {
+        "slot_count": 100,
+        "merge_time_ms": 80.42500000000001,
+        "request_payload_bytes": 19553,
+        "response_bytes": 31507
+      },
+      {
+        "slot_count": 300,
+        "merge_time_ms": 152.383334,
+        "request_payload_bytes": 58753,
+        "response_bytes": 93907
+      }
+    ]
+  },
+  "sync_latency": {
+    "summary": {
+      "count": 50,
+      "min_ms": 10.612875000000031,
+      "max_ms": 25.159999999999968,
+      "avg_ms": 13.142322439999985,
+      "p50_ms": 12.447415999999976,
+      "p95_ms": 16.584124999999972,
+      "p99_ms": 17.936958000000004
+    },
+    "samples": 50
+  },
+  "payload_size": {
+    "avg_bytes": 243.51,
+    "max_bytes": 358,
+    "min_bytes": 129
+  },
+  "conflict_rate_percent": 100,
+  "reject_reasons": [
+    {
+      "reason": "missing_signature",
+      "count": 50
+    }
+  ],
+  "limitation": "Sync ops endpoint enforces signatures in this environment; conflict-rate reflects signature rejects."
+}

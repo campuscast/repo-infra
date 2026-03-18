@@ -1,0 +1,21 @@
+{
+  "criterion": "VAL-08",
+  "generated_at": "2026-03-18T07:12:12.962Z",
+  "base_url": "http://localhost:3000",
+  "artifacts": {
+    "val03": "val03-load-2026-03-18-07-07-55.json",
+    "val04": "val04-fault-2026-03-18-07-09-37.json",
+    "val05": "val05-metrics-2026-03-18-07-11-50.json"
+  },
+  "kpi_snapshot": {
+    "val03_p95_ms_1000_clients": 140.51995799999997,
+    "val04_success_rate_percent": 81.12449799196787,
+    "val05_merge_p95_ms": 80.42500000000001,
+    "val05_sync_p95_ms": 16.584124999999972,
+    "val05_conflict_rate_percent": 100
+  },
+  "limitations": [
+    "VAL-04 currently uses client-side fault injection; tc/netem/toxiproxy is recommended for network-layer fidelity.",
+    "Sync ops endpoint enforces signatures in this environment; conflict-rate reflects signature rejects."
+  ]
+}

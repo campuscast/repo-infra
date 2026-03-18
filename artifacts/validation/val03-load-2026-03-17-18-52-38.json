@@ -1,0 +1,66 @@
+{
+  "criterion": "VAL-03",
+  "generated_at": "2026-03-17T18:52:38.180Z",
+  "base_url": "http://localhost:3000",
+  "scenario": "GET /api/v1/schedules load",
+  "scenarios": [
+    {
+      "clients": 100,
+      "requests_per_client": 3,
+      "total_requests": 300,
+      "success": 53,
+      "failures": 247,
+      "success_rate": 17.666666666666668,
+      "throughput_rps": 454.6019873826504,
+      "latency": {
+        "count": 53,
+        "min_ms": 8.03241700000001,
+        "max_ms": 106.116334,
+        "avg_ms": 70.39219422641511,
+        "p50_ms": 74.68783400000001,
+        "p95_ms": 99.52212500000002,
+        "p99_ms": 105.255875
+      }
+    },
+    {
+      "clients": 500,
+      "requests_per_client": 3,
+      "total_requests": 1500,
+      "success": 6,
+      "failures": 1494,
+      "success_rate": 0.4,
+      "throughput_rps": 31.07959511243945,
+      "latency": {
+        "count": 6,
+        "min_ms": 23.817583000000013,
+        "max_ms": 105.990834,
+        "avg_ms": 51.68406250000001,
+        "p50_ms": 41.883624999999995,
+        "p95_ms": 56.74033300000008,
+        "p99_ms": 56.74033300000008
+      }
+    },
+    {
+      "clients": 1000,
+      "requests_per_client": 3,
+      "total_requests": 3000,
+      "success": 8,
+      "failures": 2992,
+      "success_rate": 0.26666666666666666,
+      "throughput_rps": 30.374662040119652,
+      "latency": {
+        "count": 8,
+        "min_ms": 11.486041,
+        "max_ms": 178.88629100000003,
+        "avg_ms": 90.29830712500001,
+        "p50_ms": 76.82941599999992,
+        "p95_ms": 130.18116700000007,
+        "p99_ms": 130.18116700000007
+      }
+    }
+  ],
+  "notes": [
+    "Synthetic HTTP load from a single host process (concurrent virtual clients).",
+    "Useful for reproducible relative comparison (100/500/1000) on the same environment."
+  ]
+}

@@ -10,7 +10,8 @@ BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 ADMIN_EMAIL="${AUTH_BOOTSTRAP_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-}"
-ADMIN_ROLE="${AUTH_BOOTSTRAP_ADMIN_ROLE:-admin}"
+REQUESTED_ADMIN_ROLE="${AUTH_BOOTSTRAP_ADMIN_ROLE:-}"
+ADMIN_ROLE="super_admin"
 ADMIN_RESET_PASSWORD="${AUTH_BOOTSTRAP_ADMIN_RESET_PASSWORD:-false}"
 
 SKIP_BUILD=0
@@ -37,7 +38,8 @@ Usage: ./scripts/bootstrap.sh [options]
 Options:
   --admin-email <email>       First admin login/email (or AUTH_BOOTSTRAP_ADMIN_EMAIL)
   --admin-password <password> First admin password (or AUTH_BOOTSTRAP_ADMIN_PASSWORD)
-  --admin-role <role>         First admin role (default: admin)
+  --admin-role <role>         Deprecated and ignored (bootstrap role is fixed to super_admin)
+  --admin-reset-password      Force password reset for existing bootstrap admin
   --fresh                     Recreate stack from clean volumes (destructive)
   --skip-build                Skip docker image build step
   --skip-smoke                Skip post-bootstrap smoke checks
@@ -56,8 +58,12 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --admin-role)
-      ADMIN_ROLE="${2:-admin}"
+      REQUESTED_ADMIN_ROLE="${2:-}"
       shift 2
+      ;;
+    --admin-reset-password)
+      ADMIN_RESET_PASSWORD=true
+      shift
       ;;
     --skip-build)
       SKIP_BUILD=1
@@ -88,9 +94,13 @@ if [[ -z "${ADMIN_EMAIL}" || -z "${ADMIN_PASSWORD}" ]]; then
   exit 2
 fi
 
-if [[ "${ADMIN_EMAIL}" == "root" && "${ADMIN_PASSWORD}" == "admin" ]]; then
-  echo "[bootstrap] Insecure credentials root/admin are not allowed." >&2
+if [[ "${ADMIN_EMAIL}" =~ [[:space:]] ]]; then
+  echo "[bootstrap] AUTH_BOOTSTRAP_ADMIN_EMAIL must not contain whitespace." >&2
   exit 2
+fi
+
+if [[ -n "${REQUESTED_ADMIN_ROLE}" && "${REQUESTED_ADMIN_ROLE}" != "${ADMIN_ROLE}" ]]; then
+  echo "[bootstrap] AUTH_BOOTSTRAP_ADMIN_ROLE=${REQUESTED_ADMIN_ROLE} is ignored. Bootstrap role is fixed to ${ADMIN_ROLE}."
 fi
 
 export NODE_ENV="${NODE_ENV:-production}"

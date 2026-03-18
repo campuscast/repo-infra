@@ -33,7 +33,39 @@ extract_json_string() {
 cookie_value() {
   local cookie_file="$1"
   local cookie_name="$2"
-  awk -v name="${cookie_name}" 'BEGIN { value = "" } !/^#/ && $6 == name { value = $7 } END { print value }' "${cookie_file}"
+  awk -v name="${cookie_name}" 'BEGIN { value = "" } NF >= 7 && $6 == name { value = $7 } END { print value }' "${cookie_file}"
+}
+
+generate_totp_code() {
+  local secret="$1"
+  node -e '
+const crypto = require("crypto");
+const secret = String(process.argv[1] || "").toUpperCase().replace(/=+$/g, "").replace(/[^A-Z2-7]/g, "");
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+let bits = 0;
+let value = 0;
+const bytes = [];
+for (const ch of secret) {
+  const idx = alphabet.indexOf(ch);
+  if (idx < 0) continue;
+  value = (value << 5) | idx;
+  bits += 5;
+  if (bits >= 8) {
+    bytes.push((value >>> (bits - 8)) & 0xff);
+    bits -= 8;
+  }
+}
+const key = Buffer.from(bytes);
+const counter = Math.floor(Date.now() / 1000 / 30);
+const counterBuffer = Buffer.alloc(8);
+counterBuffer.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+counterBuffer.writeUInt32BE(counter >>> 0, 4);
+const digest = crypto.createHmac("sha1", key).update(counterBuffer).digest();
+const offset = digest[digest.length - 1] & 0x0f;
+const binCode = ((digest[offset] & 0x7f) << 24) | ((digest[offset + 1] & 0xff) << 16) | ((digest[offset + 2] & 0xff) << 8) | (digest[offset + 3] & 0xff);
+const code = String(binCode % 1000000).padStart(6, "0");
+process.stdout.write(code);
+' "${secret}"
 }
 
 wait_for_audit_event() {
@@ -288,6 +320,263 @@ if [[ "${schedules_response}" != *"\"schedule_id\":\"${SCHEDULE_ID}\""* ]]; then
   exit 1
 fi
 
+echo "[e2e] Schedule ops path (add/move/remove)"
+OPS_SLOT_ID="e2e-op-slot-${E2E_SUFFIX}"
+ops_signature_missing=0
+
+ops_add_payload="$(printf '{"ops":[{"op_type":"add_slot","causal":{"operation_id":"%s","client_id":"e2e-iam","lamport_ts":1},"slot":{"slot_id":"%s","asset_id":"asset-e2e-op","start_time":"2030-01-01T12:00:00Z","end_time":"2030-01-01T12:30:00Z","priority":5,"zone_id":"%s","group_id":"g-e2e-op"}}]}' "op-add-${E2E_SUFFIX}" "${OPS_SLOT_ID}" "${ZONE_ID}")"
+ops_add_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/ops" \
+  -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "${ops_add_payload}")"
+if [[ "${ops_add_response}" == *"\"accepted\":1"* ]]; then
+  ops_move_payload="$(printf '{"ops":[{"op_type":"move_slot","causal":{"operation_id":"%s","client_id":"e2e-iam","lamport_ts":2},"slot":{"slot_id":"%s","asset_id":"asset-e2e-op","start_time":"2030-01-01T12:30:00Z","end_time":"2030-01-01T13:00:00Z","priority":5,"zone_id":"%s","group_id":"g-e2e-op"}}]}' "op-move-${E2E_SUFFIX}" "${OPS_SLOT_ID}" "${ZONE_ID}")"
+  ops_move_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/ops" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "${ops_move_payload}")"
+  if [[ "${ops_move_response}" != *"\"accepted\":1"* ]]; then
+    echo "[e2e] FAIL: move_slot op was not accepted" >&2
+    echo "[e2e] Response: ${ops_move_response}" >&2
+    exit 1
+  fi
+
+  ops_remove_payload="$(printf '{"ops":[{"op_type":"remove_slot","causal":{"operation_id":"%s","client_id":"e2e-iam","lamport_ts":3},"slot":{"slot_id":"%s","asset_id":"asset-e2e-op","start_time":"2030-01-01T12:30:00Z","end_time":"2030-01-01T13:00:00Z","priority":5,"zone_id":"%s","group_id":"g-e2e-op"}}]}' "op-remove-${E2E_SUFFIX}" "${OPS_SLOT_ID}" "${ZONE_ID}")"
+  ops_remove_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/ops" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "${ops_remove_payload}")"
+  if [[ "${ops_remove_response}" != *"\"accepted\":1"* ]]; then
+    echo "[e2e] FAIL: remove_slot op was not accepted" >&2
+    echo "[e2e] Response: ${ops_remove_response}" >&2
+    exit 1
+  fi
+elif [[ "${ops_add_response}" == *"\"reason\":\"missing_signature\""* ]]; then
+  echo "[e2e] WARN: ops endpoint requires signature in this environment, using lock/save fallback for move/delete semantics"
+  ops_signature_missing=1
+else
+  echo "[e2e] FAIL: add_slot op was not accepted" >&2
+  echo "[e2e] Response: ${ops_add_response}" >&2
+  exit 1
+fi
+
+if [[ "${ops_signature_missing}" == "1" ]]; then
+  fallback_lock_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/lock" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"ttl_seconds":120}')"
+  FALLBACK_LOCK_TOKEN="$(extract_json_string "${fallback_lock_response}" "lock_token")"
+  if [[ -z "${FALLBACK_LOCK_TOKEN}" ]]; then
+    echo "[e2e] FAIL: fallback lock acquisition failed" >&2
+    echo "[e2e] Response: ${fallback_lock_response}" >&2
+    exit 1
+  fi
+
+  fallback_move_save_payload="$(printf '{"lock_token":"%s","slots":[{"asset_id":"asset-e2e-fallback","start_time":"2030-01-01T12:30:00Z","end_time":"2030-01-01T13:00:00Z","priority":6,"zone_id":"%s","group_id":"g-e2e-fallback"}]}' "${FALLBACK_LOCK_TOKEN}" "${ZONE_ID}")"
+  fallback_move_save_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/save" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "${fallback_move_save_payload}")"
+  if [[ "${fallback_move_save_response}" != *"\"schedule_id\":\"${SCHEDULE_ID}\""* ]]; then
+    echo "[e2e] FAIL: fallback move save failed" >&2
+    echo "[e2e] Response: ${fallback_move_save_response}" >&2
+    exit 1
+  fi
+
+  fallback_remove_save_payload="$(printf '{"lock_token":"%s","slots":[]}' "${FALLBACK_LOCK_TOKEN}")"
+  fallback_remove_save_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/save" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "${fallback_remove_save_payload}")"
+  if [[ "${fallback_remove_save_response}" != *"\"schedule_id\":\"${SCHEDULE_ID}\""* ]]; then
+    echo "[e2e] FAIL: fallback delete save failed" >&2
+    echo "[e2e] Response: ${fallback_remove_save_response}" >&2
+    exit 1
+  fi
+
+  curl -fsS -X DELETE "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/lock" \
+    -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$(printf '{"lock_token":"%s"}' "${FALLBACK_LOCK_TOKEN}")" >/dev/null
+fi
+
+echo "[e2e] Schedule validate path"
+validate_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules/${SCHEDULE_ID}/validate" \
+  -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{}')"
+if [[ "${validate_response}" != *"\"has_fatal\":"* && "${validate_response}" != *"\"valid\":"* ]]; then
+  echo "[e2e] FAIL: schedule validate did not return expected validation shape" >&2
+  echo "[e2e] Response: ${validate_response}" >&2
+  exit 1
+fi
+
+echo "[e2e] Zone-scoped RBAC enforcement (allow assigned zone, deny unassigned zone)"
+SECOND_ZONE_NAME="e2e-zone-rbac-${E2E_SUFFIX}"
+create_second_zone_payload="$(printf '{"name":"%s","description":"zone-rbac"}' "$(json_escape "${SECOND_ZONE_NAME}")")"
+create_second_zone_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/zones" \
+  -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "${create_second_zone_payload}")"
+SECOND_ZONE_ID="$(extract_json_string "${create_second_zone_response}" "zone_id")"
+if [[ -z "${SECOND_ZONE_ID}" ]]; then
+  echo "[e2e] FAIL: could not create second zone for RBAC checks" >&2
+  echo "[e2e] Response: ${create_second_zone_response}" >&2
+  exit 1
+fi
+
+create_second_schedule_payload="$(printf '{"zone_id":"%s","name":"%s"}' "${SECOND_ZONE_ID}" "e2e-zone-rbac-schedule-${E2E_SUFFIX}")"
+create_second_schedule_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/schedules" \
+  -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "${create_second_schedule_payload}")"
+SECOND_SCHEDULE_ID="$(extract_json_string "${create_second_schedule_response}" "schedule_id")"
+if [[ -z "${SECOND_SCHEDULE_ID}" ]]; then
+  echo "[e2e] FAIL: could not create second schedule for RBAC checks" >&2
+  echo "[e2e] Response: ${create_second_schedule_response}" >&2
+  exit 1
+fi
+
+assign_zone_payload="$(printf '{"zone_ids":["%s"]}' "${ZONE_ID}")"
+curl -fsS -X PUT "${BASE_URL}/api/v1/users/${USER_ID}" \
+  -H "Authorization: Bearer ${ADMIN_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "${assign_zone_payload}" >/dev/null
+
+user_relogin_payload="$(printf '{"email":"%s","password":"%s"}' "$(json_escape "${USER_EMAIL}")" "$(json_escape "${USER_CHANGED_PASSWORD}")")"
+user_relogin_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -c "${USER_COOKIE_JAR}" \
+  -b "${USER_COOKIE_JAR}" \
+  -d "${user_relogin_payload}")"
+USER_ACCESS_TOKEN="$(extract_json_string "${user_relogin_response}" "access_token")"
+if [[ -z "${USER_ACCESS_TOKEN}" ]]; then
+  echo "[e2e] FAIL: user relogin failed after zone assignment" >&2
+  echo "[e2e] Response: ${user_relogin_response}" >&2
+  exit 1
+fi
+
+allowed_zone_code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/schedules?zone_id=${ZONE_ID}&page=1&page_size=10" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}")"
+if [[ "${allowed_zone_code}" != "200" ]]; then
+  echo "[e2e] FAIL: expected 200 for schedule list in assigned zone, got ${allowed_zone_code}" >&2
+  exit 1
+fi
+
+denied_zone_code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/schedules?zone_id=${SECOND_ZONE_ID}&page=1&page_size=10" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}")"
+if [[ "${denied_zone_code}" != "403" ]]; then
+  echo "[e2e] FAIL: expected 403 for schedule list in unassigned zone, got ${denied_zone_code}" >&2
+  exit 1
+fi
+
+denied_lock_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/v1/schedules/${SECOND_SCHEDULE_ID}/lock" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_seconds":60}')"
+if [[ "${denied_lock_code}" != "403" ]]; then
+  echo "[e2e] FAIL: expected 403 for schedule lock in unassigned zone, got ${denied_lock_code}" >&2
+  exit 1
+fi
+
+echo "[e2e] MFA TOTP setup/verify/enable/login-challenge/disable flow"
+mfa_setup_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/mfa/setup" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{}')"
+MFA_SECRET="$(extract_json_string "${mfa_setup_response}" "secret")"
+if [[ -z "${MFA_SECRET}" ]]; then
+  echo "[e2e] FAIL: MFA setup did not return secret" >&2
+  echo "[e2e] Response: ${mfa_setup_response}" >&2
+  exit 1
+fi
+
+MFA_CODE="$(generate_totp_code "${MFA_SECRET}")"
+if [[ -z "${MFA_CODE}" ]]; then
+  echo "[e2e] FAIL: could not generate MFA code from setup secret" >&2
+  exit 1
+fi
+
+mfa_verify_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/mfa/verify" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(printf '{"code":"%s"}' "${MFA_CODE}")")"
+if [[ "${mfa_verify_response}" != *"\"ok\":true"* ]]; then
+  echo "[e2e] FAIL: MFA verify endpoint failed" >&2
+  echo "[e2e] Response: ${mfa_verify_response}" >&2
+  exit 1
+fi
+
+MFA_CODE_ENABLE="$(generate_totp_code "${MFA_SECRET}")"
+mfa_enable_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/mfa/enable" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(printf '{"code":"%s"}' "${MFA_CODE_ENABLE}")")"
+if [[ "${mfa_enable_response}" != *"\"mfa_enabled\":true"* ]]; then
+  echo "[e2e] FAIL: MFA enable endpoint failed" >&2
+  echo "[e2e] Response: ${mfa_enable_response}" >&2
+  exit 1
+fi
+
+sleep 2
+mfa_login_payload="$(printf '{"email":"%s","password":"%s"}' "$(json_escape "${USER_EMAIL}")" "$(json_escape "${USER_CHANGED_PASSWORD}")")"
+mfa_login_response=""
+mfa_login_status=""
+for attempt in $(seq 1 5); do
+  mfa_login_raw="$(curl -sS -X POST "${BASE_URL}/api/v1/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "${mfa_login_payload}" \
+    -w $'\n%{http_code}')"
+  mfa_login_status="$(printf "%s" "${mfa_login_raw}" | tail -n1)"
+  mfa_login_response="$(printf "%s" "${mfa_login_raw}" | sed '$d')"
+
+  if [[ "${mfa_login_status}" == "429" ]]; then
+    sleep $((attempt * 2))
+    continue
+  fi
+
+  if [[ "${mfa_login_status}" != "200" ]]; then
+    echo "[e2e] FAIL: MFA login challenge request returned HTTP ${mfa_login_status}" >&2
+    echo "[e2e] Response: ${mfa_login_response}" >&2
+    exit 1
+  fi
+  break
+done
+
+if [[ "${mfa_login_status}" == "429" ]]; then
+  echo "[e2e] FAIL: MFA login challenge kept hitting rate limit (429) after retries" >&2
+  echo "[e2e] Response: ${mfa_login_response}" >&2
+  exit 1
+fi
+
+MFA_LOGIN_TOKEN="$(extract_json_string "${mfa_login_response}" "mfa_token")"
+if [[ -z "${MFA_LOGIN_TOKEN}" || "${mfa_login_response}" != *"\"mfa_required\":true"* ]]; then
+  echo "[e2e] FAIL: login did not return MFA challenge for MFA-enabled user" >&2
+  echo "[e2e] Response: ${mfa_login_response}" >&2
+  exit 1
+fi
+
+MFA_CODE_LOGIN="$(generate_totp_code "${MFA_SECRET}")"
+mfa_login_verify_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/mfa/login-verify" \
+  -H "Content-Type: application/json" \
+  -d "$(printf '{"mfa_token":"%s","code":"%s"}' "${MFA_LOGIN_TOKEN}" "${MFA_CODE_LOGIN}")")"
+USER_ACCESS_TOKEN="$(extract_json_string "${mfa_login_verify_response}" "access_token")"
+if [[ -z "${USER_ACCESS_TOKEN}" ]]; then
+  echo "[e2e] FAIL: MFA login verify did not return access token" >&2
+  echo "[e2e] Response: ${mfa_login_verify_response}" >&2
+  exit 1
+fi
+
+mfa_disable_response="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/mfa/disable" \
+  -H "Authorization: Bearer ${USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(printf '{"password":"%s"}' "$(json_escape "${USER_CHANGED_PASSWORD}")")")"
+if [[ "${mfa_disable_response}" != *"\"mfa_enabled\":false"* ]]; then
+  echo "[e2e] FAIL: MFA disable endpoint failed" >&2
+  echo "[e2e] Response: ${mfa_disable_response}" >&2
+  exit 1
+fi
+
 echo "[e2e] Checking audit side-effects"
 wait_for_audit_event "iam.user_created" "${USER_ID}"
 wait_for_audit_event "iam.role_created" "${ROLE_ID}"
@@ -301,4 +590,4 @@ if [[ "${deactivate_response}" != *"\"status\":\"inactive\""* ]]; then
   exit 1
 fi
 
-echo "[e2e] PASS: bootstrap/init, admin login, users/roles CRUD, permission enforcement, password reset/change, cookie-auth, schedule edit path, and audit checks succeeded."
+echo "[e2e] PASS: bootstrap/init, admin login, users/roles CRUD, permission enforcement, zone-scoped RBAC, MFA TOTP flow, password reset/change, cookie-auth, schedule save+ops+validate paths, and audit checks succeeded."

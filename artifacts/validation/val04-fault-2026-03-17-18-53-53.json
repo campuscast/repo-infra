@@ -1,0 +1,62 @@
+{
+  "criterion": "VAL-04",
+  "generated_at": "2026-03-17T18:53:53.326Z",
+  "base_url": "http://localhost:3000",
+  "injector_profile": {
+    "packet_loss_rate": 0.2,
+    "duplicate_rate": 0.12,
+    "delay_ms": {
+      "min": 120,
+      "max": 450
+    },
+    "reconnect_every_requests": 75,
+    "temporary_partition": {
+      "from_index": 120,
+      "to_index": 180
+    }
+  },
+  "totals": {
+    "planned_requests": 300,
+    "dropped": 51,
+    "duplicated_events": 26,
+    "sent_requests": 275,
+    "success": 220,
+    "failures": 55,
+    "success_rate": 80
+  },
+  "latency": {
+    "count": 220,
+    "min_ms": 2.8537500000020373,
+    "max_ms": 42.93354199999885,
+    "avg_ms": 9.581626890909094,
+    "p50_ms": 9.547042000001966,
+    "p95_ms": 13.826791999999841,
+    "p99_ms": 16.703832999999577
+  },
+  "failure_samples": [
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed",
+    "fetch failed"
+  ],
+  "notes": [
+    "Faults are injected at client/request level (delay, drop, duplicate, reconnect, temporary partition).",
+    "For network-layer realism, replace with tc/netem or Toxiproxy in a Linux CI runner."
+  ]
+}
