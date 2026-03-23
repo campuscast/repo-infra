@@ -16,16 +16,18 @@ services:
     environment:
       POSTGRES_USER: campuscast
       POSTGRES_PASSWORD: campuscast
+      POSTGRES_DB: campuscast
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U campuscast"]
+      test: ["CMD-SHELL", "pg_isready -U campuscast -d campuscast"]
+      start_period: 45s
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 20
 
   redis:
     image: redis:7-alpine
@@ -235,6 +237,7 @@ services:
       SIGNING_KMS_URL: http://signing-kms:3008
       VALIDATION_QA_URL: http://validation-qa:3007
       SYNC_SERVICE_URL: http://sync-service:3006
+      CONTENT_SERVICE_URL: http://content-service:3004
       ZONE_SERVICE_URL: http://zone-policy:3002
       DEVICE_SERVICE_URL: http://device-management:3003
     depends_on:
