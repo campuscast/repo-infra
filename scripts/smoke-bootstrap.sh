@@ -7,6 +7,7 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-campuscast}"
 COMPOSE_FILE="${COMPOSE_FILE:-${ROOT_DIR}/compose.yaml}"
 BASE_URL="${BASE_URL:-http://localhost:3000}"
+API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-300}"
 ADMIN_EMAIL="${AUTH_BOOTSTRAP_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-}"
 REQUESTED_ADMIN_ROLE="${AUTH_BOOTSTRAP_ADMIN_ROLE:-}"
@@ -107,7 +108,8 @@ check_migrations_row() {
 }
 
 wait_health() {
-  for _ in $(seq 1 90); do
+  local deadline=$((SECONDS + API_HEALTH_TIMEOUT_SECONDS))
+  while (( SECONDS < deadline )); do
     if curl -fsS "${BASE_URL}/health" >/dev/null 2>&1; then
       return 0
     fi

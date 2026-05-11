@@ -2,6 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
+API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-300}"
 ADMIN_EMAIL="${AUTH_BOOTSTRAP_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-}"
 
@@ -87,7 +88,8 @@ wait_for_audit_event() {
 }
 
 echo "[e2e] Waiting for gateway health"
-for _ in $(seq 1 60); do
+deadline=$((SECONDS + API_HEALTH_TIMEOUT_SECONDS))
+while (( SECONDS < deadline )); do
   if curl -fsS "${BASE_URL}/health" >/dev/null 2>&1; then
     break
   fi
